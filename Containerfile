@@ -1,38 +1,34 @@
 FROM ghcr.io/ublue-os/bazzite:stable
 
-# Dependencias de compilacion
+# instalar herramientas necesarias (sin romper kernel)
 RUN dnf install -y \
     gcc \
     make \
-    kernel-devel \
     git \
+    kernel-devel \
+    kernel-headers \
+    --setopt=install_weak_deps=False \
+    --skip-broken \
     && dnf clean all
 
-# Copiar codigo fuente del driver
+# copiar driver
 COPY apple-bce-drv /tmp/apple-bce-drv
 
-# Compilar el modulo
-RUN cd /tmp/apple-bce-drv && \
-    make
+# debug + compilacion
+RUN uname -r && \
+    ls -d /usr/src/kernels/* || true && \
+    ls -la /tmp/apple-bce-drv && \
+    cd /tmp/apple-bce-drv && \
+    make || (echo "MAKE FAILED" && exit 1)
 
-# Copiar el modulo compilado a una ruta persistente dentro de la imagen
+# copiar modulo (solo si existe)
 RUN mkdir -p /usr/lib/modules-extra && \
-    cp /tmp/apple-bce-drv/apple-bce.ko /usr/lib/modules-extra/apple-bce.ko
+    if [ -f /tmp/apple-bce-drv/apple-bce.ko ]; then \
+        cp /tmp/apple-bce-drv/apple-bce.ko /usr/lib/modules-extra/; \
+    else \
+        echo "Module not built"; exit 1; \
+    fi
 
-# Servicio para cargar el modulo al arrancar
-RUN mkdir -p /usr/lib/systemd/system && \
-    printf '%s\n' \
-    '[Unit]' \
-    'Description=Load Apple BCE module' \
-    'After=systemd-modules-load.service' \
-    '' \
-    '[Service]' \
-    'Type=oneshot' \
-    'ExecStart=/usr/sbin/insmod /usr/lib/modules-extra/apple-bce.ko' \
-    'RemainAfterExit=yes' \
-    '' \
-    '[Install]' \
-    'WantedBy=multi-user.target' \
-    > /usr/lib/systemd/system/apple-bce.service
-
-RUN systemctl enable apple-bce.service
+# cargar modulo automaticamente (forma correcta)
+RUN mkdir -p /usr/lib/modules-load.d && \
+    echo apple_bce > /usr/lib/modules-load.d/apple-bce.conf
