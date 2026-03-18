@@ -1,4 +1,4 @@
-FROM ghcr.io/ublue-os/bazzite:latest
+FROM ghcr.io/ublue-os/bazzite:stable
 
 # Dependencias de compilacion
 RUN dnf install -y \
