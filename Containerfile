@@ -1,20 +1,38 @@
 FROM ghcr.io/ublue-os/bazzite:latest
 
-# dependencias para compilar
-RUN rpm-ostree install \
-    kernel-devel \
+# Dependencias de compilacion
+RUN dnf install -y \
     gcc \
     make \
-    git
+    kernel-devel \
+    git \
+    && dnf clean all
 
-# copiar driver
-COPY apple-bce-drv /tmp/apple-bce
+# Copiar codigo fuente del driver
+COPY apple-bce-drv /tmp/apple-bce-drv
 
-# compilar driver
-RUN cd /tmp/apple-bce && \
-    make && \
-    mkdir -p /usr/lib/modules-extra && \
-    cp apple-bce.ko /usr/lib/modules-extra/
+# Compilar el modulo
+RUN cd /tmp/apple-bce-drv && \
+    make
 
-# cargar módulo en arranque
-RUN echo apple_bce > /usr/lib/modules-load.d/apple-t2.conf
+# Copiar el modulo compilado a una ruta persistente dentro de la imagen
+RUN mkdir -p /usr/lib/modules-extra && \
+    cp /tmp/apple-bce-drv/apple-bce.ko /usr/lib/modules-extra/apple-bce.ko
+
+# Servicio para cargar el modulo al arrancar
+RUN mkdir -p /usr/lib/systemd/system && \
+    printf '%s\n' \
+    '[Unit]' \
+    'Description=Load Apple BCE module' \
+    'After=systemd-modules-load.service' \
+    '' \
+    '[Service]' \
+    'Type=oneshot' \
+    'ExecStart=/usr/sbin/insmod /usr/lib/modules-extra/apple-bce.ko' \
+    'RemainAfterExit=yes' \
+    '' \
+    '[Install]' \
+    'WantedBy=multi-user.target' \
+    > /usr/lib/systemd/system/apple-bce.service
+
+RUN systemctl enable apple-bce.service
