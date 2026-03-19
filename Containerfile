@@ -12,12 +12,15 @@ RUN dnf install -y \
 
 COPY apple-bce-drv /tmp/apple-bce-drv
 
-RUN echo "=== /tmp ===" && \
-    ls -la /tmp && \
-    echo "=== /tmp/apple-bce-drv ===" && \
-    ls -la /tmp/apple-bce-drv || true && \
-    echo "=== files ===" && \
-    find /tmp/apple-bce-drv -maxdepth 3 -type f || true && \
-    test -f /tmp/apple-bce-drv/Makefile
+RUN echo "=== kernels ===" && \
+    find /usr/src/kernels -mindepth 1 -maxdepth 1 -type d
 
-RUN cd /tmp/apple-bce-drv && make
+RUN KDIR=$(find /usr/src/kernels -mindepth 1 -maxdepth 1 -type d | head -n 1) && \
+    echo "Using kernel dir: $KDIR" && \
+    make -C "$KDIR" M=/tmp/apple-bce-drv modules
+
+RUN mkdir -p /usr/lib/modules-extra && \
+    cp /tmp/apple-bce-drv/*.ko /usr/lib/modules-extra/
+
+RUN mkdir -p /usr/lib/modules-load.d && \
+    echo apple_bce > /usr/lib/modules-load.d/apple-bce.conf
